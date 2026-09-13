@@ -27,10 +27,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "${TELEGRAM_API_ID:-}" || -z "${TELEGRAM_API_HASH:-}" ]]; then
-            echo "TELEGRAM_API_ID and TELEGRAM_API_HASH must be configured as GitHub Actions secrets."
-            exit 1
-          fi
+          test -n "${TELEGRAM_API_ID:-}"
+          test -n "${TELEGRAM_API_HASH:-}"
 
       - name: Install system dependencies
         run: |
@@ -41,12 +39,12 @@ jobs:
         run: |
           git clone --recursive --shallow-submodules "$TELEGRAM_UPSTREAM_REPO" upstream
 
-      - name: Configure TeleForge API credentials
+      - name: Configure Telegram credentials
         working-directory: upstream
         shell: bash
         run: |
           set -euo pipefail
-          python3 "$GITHUB_WORKSPACE/scripts/configure-upstream.py"
+          python3 -c 'from pathlib import Path; import os; import re; p=Path("TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java"); s=p.read_text(); s,n1=re.subn(r"public static int APP_ID = \\d+;", "public static int APP_ID = "+os.environ["TELEGRAM_API_ID"]+";", s, count=1); s,n2=re.subn(r"public static String APP_HASH = \"[^\"]*\";", "public static String APP_HASH = \""+os.environ["TELEGRAM_API_HASH"]+"\";", s, count=1); assert n1==1 and n2==1; p.write_text(s)'
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -60,23 +58,23 @@ jobs:
 
       - name: Install Android SDK and NDK
         run: |
-          sdkmanager "platforms;android-${ANDROID_API_LEVEL}" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}"
+          sdkmanager "platforms;android-${ANDROID_API_LEVEL}" "build-tools;36.0.0" "ndk;${ANDROID_NDK_VERSION}"
           yes | sdkmanager --licenses >/dev/null || true
 
-      - name: Build upstream baseline APK
+      - name: Build TeleForge debug APK
         working-directory: upstream
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew assembleAfatDebug --no-daemon --stacktrace
+          ./gradlew :TMessagesProj_App:assembleAfatDebug --no-daemon --stacktrace
 
       - name: Collect APKs
         if: always()
         shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
-          find upstream -type f \( -name '*.apk' -o -name '*.aab' \) -print -exec cp {} "$GITHUB_WORKSPACE/artifacts/" \; || true
+          find upstream -type f \( -name '*.apk' -o -name '*.aab' \) -exec cp {} "$GITHUB_WORKSPACE/artifacts/" \; || true
 
       - name: Upload TeleForge APK
         if: success()
