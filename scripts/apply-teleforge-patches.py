@@ -232,7 +232,7 @@ if "Power tools and customization" not in text:
     text = text[:match.end()] + row_text + text[match.end():]
 
 if "item.id == 9001" not in text:
-    method = re.search(r"@Override\s+protected void onClick\(UItem item, View view, int position, float x, float y\)\s*\{\n", text)
+    method = re.search(r"(?m)^\s*(?:private|protected|public)\s+void\s+onClick\(UItem item, View view, int position, float x, float y\)\s*\{\n", text)
     if not method:
         raise SystemExit("Could not find the SettingsActivity onClick method")
     insertion = "        if (item.id == 9001) {\n            presentSettingFragment(new TeleForgeHubActivity());\n            return;\n        }\n"
