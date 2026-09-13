@@ -52,14 +52,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f TMessagesProj/src/main/java/org/telegram/ui/TeleForgeFoldersActivity.java
-          grep -Fq 'private MainTabsLayout teleForgeTabsView;' TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java
-          grep -Fq 'createTeleForgeNavigation(Context context)' TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java
-          grep -Fq 'R.drawable.msg_folders' TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java
-          grep -Fq 'actionBar.setTitle("TeleForge", statusDrawable);' TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java
-          grep -Fq 'Your chats, your way.' TMessagesProj/src/main/java/org/telegram/ui/TeleForgeFoldersActivity.java
-          grep -Fq 'createIconTab(Context context' TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java
-          echo 'Verified: TeleForge navigation, title, and Power Folders source are present before Gradle.'
+          python3 - <<'PY'
+          from pathlib import Path
+
+          checks = {
+              "Power Folders activity": (Path("TMessagesProj/src/main/java/org/telegram/ui/TeleForgeFoldersActivity.java"), None),
+              "custom navigation field": (Path("TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java"), "private MainTabsLayout teleForgeTabsView;"),
+              "custom navigation method": (Path("TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java"), "createTeleForgeNavigation(Context context)"),
+              "Folders drawable": (Path("TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java"), "R.drawable.msg_folders"),
+              "TeleForge dialogs title": (Path("TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java"), 'actionBar.setTitle("TeleForge", statusDrawable);'),
+              "Power Folders hero": (Path("TMessagesProj/src/main/java/org/telegram/ui/TeleForgeFoldersActivity.java"), "Your chats, your way."),
+              "icon tab factory": (Path("TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java"), "createIconTab(Context context"),
+          }
+
+          missing = []
+          for name, (path, needle) in checks.items():
+              if not path.is_file():
+                  missing.append(f"{name}: file missing -> {path}")
+                  continue
+              if needle is not None and needle not in path.read_text(encoding="utf-8"):
+                  missing.append(f"{name}: expected text missing -> {needle}")
+                  continue
+              print(f"OK: {name}")
+
+          if missing:
+              print("FAILED GENERATED-SOURCE VERIFICATION:")
+              for item in missing:
+                  print(f"  - {item}")
+              raise SystemExit(1)
+          print("Verified: all TeleForge UI source patches are present before Gradle.")
+          PY
 
       - name: Configure Telegram credentials
         working-directory: upstream
