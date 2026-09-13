@@ -45,10 +45,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Keep the upstream source tree/package namespace intact for now.
-          # A separate application identity will be introduced together with
-          # TeleForge-owned Firebase configuration in a later release step.
-
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -63,9 +59,7 @@ jobs:
               text = re.sub(r'(<string\s+name="Page1Title">)Telegram(</string>)', r'\1TeleForge\2', text)
               path.write_text(text, encoding='utf-8')
 
-          # Hide the upstream debug-only Test Backend control from public
-          # TeleForge builds while leaving the underlying networking capability
-          # untouched for future developer builds.
+          # Hide the upstream Test Backend control from public TeleForge builds.
           login = root / 'TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java'
           text = login.read_text(encoding='utf-8')
           old = 'final boolean allowTestBackend = (BuildVars.DEBUG_VERSION || TEST_BACKEND_IN_STORE && !BuildConfig.BUNDLE) || getConnectionsManager().isTestBackend();'
@@ -75,46 +69,36 @@ jobs:
           text = text.replace(old, new, 1)
           login.write_text(text, encoding='utf-8')
 
-          # Replace the first onboarding page animation with the TeleForge
-          # mark while retaining Telegram's native animation on the other pages.
+          # Replace the first onboarding page icon with the TeleForge mark.
           intro = root / 'TMessagesProj/src/main/java/org/telegram/ui/IntroActivity.java'
           text = intro.read_text(encoding='utf-8')
           import_line = 'import android.widget.FrameLayout;'
           if import_line not in text:
               raise SystemExit('Expected IntroActivity FrameLayout import was not found')
-          text = text.replace(import_line, import_line + '\nimport android.widget.ImageView;', 1)
+          if 'import android.widget.ImageView;' not in text:
+              text = text.replace(import_line, import_line + '\nimport android.widget.ImageView;', 1)
 
-          marker = '        textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {'
-          if marker not in text:
-              raise SystemExit('Expected IntroActivity texture listener was not found')
-
-          # Insert the overlay after the TextureView listener block, immediately
-          # before the ViewPager is created. The exact upstream block is used so
-          # this fails loudly if Telegram changes the surrounding code.
           needle = '        viewPager = new ViewPager(context);'
           overlay = '''        ImageView teleForgeIntroIcon = new ImageView(context);
         teleForgeIntroIcon.setImageResource(R.drawable.ic_teleforge_launcher);
         teleForgeIntroIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        frameLayout2.addView(teleForgeIntroIcon, LayoutHelper.createFrame(ICON_WIDTH_DP, ICON_HEIGHT_DP, Gravity.CENTER));
+        frameLayout2.addView(teleForgeIntroIcon, LayoutHelper.createFrame(160, 160, Gravity.CENTER));
         teleForgeIntroIcon.setVisibility(View.VISIBLE);
 
 '''
           if needle not in text:
               raise SystemExit('Expected IntroActivity ViewPager creation was not found')
-          text = text.replace(needle, overlay + needle, 1)
+          if 'teleForgeIntroIcon.setImageResource' not in text:
+              text = text.replace(needle, overlay + needle, 1)
 
-          # Toggle the overlay when the onboarding page changes.
           old_selected = '            public void onPageSelected(int i) {\n                currentViewPagerPage = i;\n            }'
           new_selected = '            public void onPageSelected(int i) {\n                currentViewPagerPage = i;\n                teleForgeIntroIcon.setVisibility(i == 0 ? View.VISIBLE : View.GONE);\n            }'
           if old_selected not in text:
               raise SystemExit('Expected IntroActivity onPageSelected block was not found')
           text = text.replace(old_selected, new_selected, 1)
           intro.write_text(text, encoding='utf-8')
-          PY
 
-          # TeleForge launcher mark. This is a vector drawable so it works
-          # across Android versions without depending on Telegram's bitmap
-          # launcher assets.
+          # TeleForge launcher mark.
           mkdir -p TMessagesProj/src/main/res/drawable
           cat > TMessagesProj/src/main/res/drawable/ic_teleforge_launcher.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
@@ -123,25 +107,187 @@ jobs:
               android:height="108dp"
               android:viewportWidth="108"
               android:viewportHeight="108">
-              <path
-                  android:fillColor="#111827"
-                  android:pathData="M14,4 L94,4 C99.5,4 104,8.5 104,14 L104,94 C104,99.5 99.5,104 94,104 L14,104 C8.5,104 4,99.5 4,94 L4,14 C4,8.5 8.5,4 14,4 Z" />
-              <path
-                  android:fillColor="#5EEAD4"
-                  android:pathData="M18,25 L64,25 L64,36 L47,36 L47,82 L35,82 L35,36 L18,36 Z" />
-              <path
-                  android:fillColor="#FFFFFF"
-                  android:pathData="M58,25 L91,25 L91,36 L70,36 L70,48 L88,48 L88,59 L70,59 L70,82 L58,82 Z" />
+              <path android:fillColor="#111827" android:pathData="M14,4 L94,4 C99.5,4 104,8.5 104,14 L104,94 C104,99.5 99.5,104 94,104 L14,104 C8.5,104 4,99.5 4,94 L4,14 C4,8.5 8.5,4 14,4 Z" />
+              <path android:fillColor="#5EEAD4" android:pathData="M18,25 L64,25 L64,36 L47,36 L47,82 L35,82 L35,36 L18,36 Z" />
+              <path android:fillColor="#FFFFFF" android:pathData="M58,25 L91,25 L91,36 L70,36 L70,48 L88,48 L88,59 L70,59 L70,82 L58,82 Z" />
           </vector>
           XML
 
-          # Use the TeleForge mark for the public application and account icon.
           find TMessagesProj/config TMessagesProj/src/main -type f \( -name 'AndroidManifest*.xml' -o -name 'auth.xml' -o -name 'contacts.xml' \) -print0 \
             | xargs -0 sed -i \
               -e 's#@mipmap/ic_launcher_sa#@drawable/ic_teleforge_launcher#g' \
               -e 's#@mipmap/ic_launcher_round#@drawable/ic_teleforge_launcher#g' \
               -e 's#@mipmap/ic_launcher#@drawable/ic_teleforge_launcher#g' \
               -e 's#@drawable/ic_launcher_dr#@drawable/ic_teleforge_launcher#g'
+
+      - name: Add TeleForge power hub
+        working-directory: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p TMessagesProj/src/main/java/org/telegram/ui
+          cat > TMessagesProj/src/main/java/org/telegram/ui/TeleForgeHubActivity.java <<'JAVA'
+          package org.telegram.ui;
+
+          import android.content.Context;
+          import android.content.SharedPreferences;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.os.Bundle;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.widget.CompoundButton;
+          import android.widget.LinearLayout;
+          import android.widget.Switch;
+          import android.widget.TextView;
+
+          import org.telegram.messenger.AndroidUtilities;
+          import org.telegram.messenger.R;
+          import org.telegram.ui.ActionBar.BaseFragment;
+          import org.telegram.ui.ActionBar.Theme;
+
+          public class TeleForgeHubActivity extends BaseFragment {
+              private static final String PREFS = "teleforge_features";
+              private static final String EXPERIMENTAL = "experimental";
+              private static final String PRIVACY_MODE = "privacy_mode";
+
+              private SharedPreferences prefs;
+
+              @Override
+              public View createView(Context context) {
+                  actionBar.setBackButtonImage(R.drawable.ic_ab_back);
+                  actionBar.setTitle("TeleForge");
+                  actionBar.setAllowOverlayTitle(true);
+
+                  prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+
+                  LinearLayout root = new LinearLayout(context);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setPadding(AndroidUtilities.dp(18), AndroidUtilities.dp(18), AndroidUtilities.dp(18), AndroidUtilities.dp(24));
+                  root.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+
+                  TextView header = text(context, "Power User Control Center", 24, true);
+                  root.addView(header, new LinearLayout.LayoutParams(-1, -2));
+
+                  TextView subtitle = text(context, "TeleForge tools and customization in one place.", 14, false);
+                  subtitle.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
+                  LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
+                  subLp.topMargin = AndroidUtilities.dp(6);
+                  root.addView(subtitle, subLp);
+
+                  root.addView(section(context, "POWER TOOLS"));
+                  root.addView(action(context, "Power Folders", "Manage Telegram folders with TeleForge's power workflow.", v -> presentFragment(new FiltersSetupActivity())));
+                  root.addView(action(context, "Theme Studio", "Open Telegram's full theme editor from the TeleForge hub.", v -> presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_BASIC))));
+
+                  root.addView(section(context, "TELEFORGE MODES"));
+                  root.addView(toggle(context, "Experimental features", "Enable TeleForge experimental UI/features when available.", EXPERIMENTAL, false));
+                  root.addView(toggle(context, "Privacy-first mode", "Enable TeleForge privacy-oriented feature flags.", PRIVACY_MODE, false));
+
+                  TextView info = text(context, "More TeleForge-native controls will be added here as they are implemented.", 13, false);
+                  info.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
+                  LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(-1, -2);
+                  infoLp.topMargin = AndroidUtilities.dp(20);
+                  root.addView(info, infoLp);
+
+                  fragmentView = root;
+                  return root;
+              }
+
+              private TextView text(Context context, String value, int size, boolean bold) {
+                  TextView view = new TextView(context);
+                  view.setText(value);
+                  view.setTextSize(size);
+                  view.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+                  view.setGravity(Gravity.CENTER_VERTICAL);
+                  if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                  return view;
+              }
+
+              private TextView section(Context context, String value) {
+                  TextView view = text(context, value, 12, true);
+                  view.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText));
+                  LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, AndroidUtilities.dp(36));
+                  lp.topMargin = AndroidUtilities.dp(16);
+                  view.setLayoutParams(lp);
+                  return view;
+              }
+
+              private View action(Context context, String title, String description, View.OnClickListener listener) {
+                  LinearLayout row = new LinearLayout(context);
+                  row.setOrientation(LinearLayout.VERTICAL);
+                  row.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(12), AndroidUtilities.dp(14), AndroidUtilities.dp(12));
+                  row.setBackground(Theme.createRoundRectDrawable(AndroidUtilities.dp(14), Theme.getColor(Theme.key_windowBackgroundGray)));
+                  row.setOnClickListener(listener);
+                  TextView titleView = text(context, title, 16, true);
+                  TextView descView = text(context, description, 13, false);
+                  descView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
+                  row.addView(titleView, new LinearLayout.LayoutParams(-1, -2));
+                  LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(-1, -2);
+                  dlp.topMargin = AndroidUtilities.dp(4);
+                  row.addView(descView, dlp);
+                  LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+                  lp.topMargin = AndroidUtilities.dp(6);
+                  row.setLayoutParams(lp);
+                  return row;
+              }
+
+              private View toggle(Context context, String title, String description, String key, boolean defaultValue) {
+                  LinearLayout row = new LinearLayout(context);
+                  row.setGravity(Gravity.CENTER_VERTICAL);
+                  row.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(10), AndroidUtilities.dp(8), AndroidUtilities.dp(10));
+                  row.setBackground(Theme.createRoundRectDrawable(AndroidUtilities.dp(14), Theme.getColor(Theme.key_windowBackgroundGray)));
+
+                  LinearLayout labels = new LinearLayout(context);
+                  labels.setOrientation(LinearLayout.VERTICAL);
+                  TextView titleView = text(context, title, 16, true);
+                  TextView descView = text(context, description, 12, false);
+                  descView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
+                  labels.addView(titleView, new LinearLayout.LayoutParams(-1, -2));
+                  LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(-1, -2);
+                  dlp.topMargin = AndroidUtilities.dp(3);
+                  labels.addView(descView, dlp);
+                  row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
+
+                  Switch toggle = new Switch(context);
+                  toggle.setChecked(prefs.getBoolean(key, defaultValue));
+                  toggle.setOnCheckedChangeListener((buttonView, isChecked) -> prefs.edit().putBoolean(key, isChecked).apply());
+                  row.addView(toggle, new LinearLayout.LayoutParams(-2, -2));
+
+                  LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+                  lp.topMargin = AndroidUtilities.dp(6);
+                  row.setLayoutParams(lp);
+                  return row;
+              }
+          }
+          JAVA
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          settings = Path('TMessagesProj/src/main/java/org/telegram/ui/SettingsActivity.java')
+          text = settings.read_text(encoding='utf-8')
+
+          # Add a TeleForge entry to the existing settings list.
+          if 'Power tools, folders and customization' not in text:
+              pattern = r'(?m)^([ \t]*items\.add\(SettingCell\.Factory\.of\(10,.*\);\n)'
+              match = re.search(pattern, text)
+              if not match:
+                  raise SystemExit('Could not find the SettingsActivity language row anchor')
+              row = '        items.add(SettingCell.Factory.of(9001, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_power, "TeleForge", "Power tools, folders and customization"));\n'
+              text = text[:match.end()] + row + text[match.end():]
+
+          # Open the TeleForge hub when its settings row is tapped.
+          if 'item.id == 9001' not in text:
+              method = re.search(r'(@Override\s+protected void onClick\(UItem item, View view, int position, float x, float y\)\s*\{\n)', text)
+              if not method:
+                  raise SystemExit('Could not find SettingsActivity onClick method')
+              insertion = '        if (item.id == 9001) {\n            presentSettingFragment(new TeleForgeHubActivity());\n            return;\n        }\n'
+              text = text[:method.end()] + insertion + text[method.end():]
+
+          settings.write_text(text, encoding='utf-8')
+          print('TeleForge settings integration patched')
+          PY
 
       - name: Configure Telegram credentials
         working-directory: upstream
