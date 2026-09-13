@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -c 'from pathlib import Path; import os; import re; p=Path("TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java"); s=p.read_text(); s,n1=re.subn(r"public static int APP_ID = \\d+;", "public static int APP_ID = "+os.environ["TELEGRAM_API_ID"]+";", s, count=1); s,n2=re.subn(r"public static String APP_HASH = \"[^\"]*\";", "public static String APP_HASH = \""+os.environ["TELEGRAM_API_HASH"]+"\";", s, count=1); assert n1==1 and n2==1; p.write_text(s)'
+          python3 -c 'from pathlib import Path; import os; import re; p=Path("TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java"); s=p.read_text(); s,n1=re.subn(r"public static int APP_ID = [0-9]+;", "public static int APP_ID = "+os.environ["TELEGRAM_API_ID"]+";", s, count=1); s,n2=re.subn(r"public static String APP_HASH = \"[^\"]*\";", "public static String APP_HASH = \""+os.environ["TELEGRAM_API_HASH"]+"\";", s, count=1); assert n1==1 and n2==1; p.write_text(s)'
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
