@@ -55,12 +55,12 @@ jobs:
 
           root = Path('.')
 
-          # TeleForge branding: app labels are user-facing and safe to change
-          # without rewriting Telegram service/protocol terminology.
+          # User-facing app branding across all localized resources.
           for path in root.glob('TMessagesProj/src/main/res/**/strings.xml'):
               text = path.read_text(encoding='utf-8')
               text = re.sub(r'(<string\s+name="AppName">)Telegram(</string>)', r'\1TeleForge\2', text)
               text = re.sub(r'(<string\s+name="AppNameBeta">)Telegram Beta(</string>)', r'\1TeleForge Beta\2', text)
+              text = re.sub(r'(<string\s+name="Page1Title">)Telegram(</string>)', r'\1TeleForge\2', text)
               path.write_text(text, encoding='utf-8')
 
           # Hide the upstream debug-only Test Backend control from public
@@ -74,6 +74,42 @@ jobs:
               raise SystemExit('Expected LoginActivity Test Backend gate was not found')
           text = text.replace(old, new, 1)
           login.write_text(text, encoding='utf-8')
+
+          # Replace the first onboarding page animation with the TeleForge
+          # mark while retaining Telegram's native animation on the other pages.
+          intro = root / 'TMessagesProj/src/main/java/org/telegram/ui/IntroActivity.java'
+          text = intro.read_text(encoding='utf-8')
+          import_line = 'import android.widget.FrameLayout;'
+          if import_line not in text:
+              raise SystemExit('Expected IntroActivity FrameLayout import was not found')
+          text = text.replace(import_line, import_line + '\nimport android.widget.ImageView;', 1)
+
+          marker = '        textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {'
+          if marker not in text:
+              raise SystemExit('Expected IntroActivity texture listener was not found')
+
+          # Insert the overlay after the TextureView listener block, immediately
+          # before the ViewPager is created. The exact upstream block is used so
+          # this fails loudly if Telegram changes the surrounding code.
+          needle = '        viewPager = new ViewPager(context);'
+          overlay = '''        ImageView teleForgeIntroIcon = new ImageView(context);
+        teleForgeIntroIcon.setImageResource(R.drawable.ic_teleforge_launcher);
+        teleForgeIntroIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        frameLayout2.addView(teleForgeIntroIcon, LayoutHelper.createFrame(ICON_WIDTH_DP, ICON_HEIGHT_DP, Gravity.CENTER));
+        teleForgeIntroIcon.setVisibility(View.VISIBLE);
+
+'''
+          if needle not in text:
+              raise SystemExit('Expected IntroActivity ViewPager creation was not found')
+          text = text.replace(needle, overlay + needle, 1)
+
+          # Toggle the overlay when the onboarding page changes.
+          old_selected = '            public void onPageSelected(int i) {\n                currentViewPagerPage = i;\n            }'
+          new_selected = '            public void onPageSelected(int i) {\n                currentViewPagerPage = i;\n                teleForgeIntroIcon.setVisibility(i == 0 ? View.VISIBLE : View.GONE);\n            }'
+          if old_selected not in text:
+              raise SystemExit('Expected IntroActivity onPageSelected block was not found')
+          text = text.replace(old_selected, new_selected, 1)
+          intro.write_text(text, encoding='utf-8')
           PY
 
           # TeleForge launcher mark. This is a vector drawable so it works
