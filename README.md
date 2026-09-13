@@ -1,10 +1,19 @@
 # TeleForge
 
-**An unofficial, power-user Telegram Android client.**
+**The Power User Telegram Client.**
 
-TeleForge is built on top of the official open-source Telegram Android client, with a focus on advanced customization, power-user tools, privacy controls, performance, and optional user-triggered AI features.
+TeleForge is an unofficial third-party Telegram Android client built on top of the official open-source Telegram Android source, with a focus on advanced customization, power-user tools, privacy controls, performance, and optional user-triggered AI features.
 
 > TeleForge is an unofficial third-party Telegram client and is not affiliated with Telegram.
+
+## Current baseline
+
+- Official Telegram Android source is used as the upstream foundation.
+- GitHub Actions builds the Android APK from a fresh upstream checkout.
+- TeleForge API credentials are supplied through GitHub Actions secrets.
+- Public builds use TeleForge app branding and launcher artwork.
+- The upstream debug-only **Test Backend** selector is hidden from public builds.
+- The first production identity/package migration is intentionally held until TeleForge has its own Firebase configuration, so push notifications are not accidentally tied to Telegram's Firebase application.
 
 ## Project direction
 
@@ -37,7 +46,7 @@ Add:
 
 Never commit either credential to source control.
 
-Run **Actions → Build TeleForge → Run workflow**. The first workflow run is a toolchain/upstream validation build; feature work follows after the baseline APK builds successfully.
+Run **Actions → Build TeleForge → Run workflow**. The workflow creates the current TeleForge debug APK as the `TeleForge-debug` artifact.
 
 ## Licensing
 
@@ -45,4 +54,4 @@ The upstream Telegram Android project is GPL-2.0-or-later. TeleForge will preser
 
 ## Branding
 
-TeleForge has its own name, application branding and visual identity and must clearly identify itself as an unofficial Telegram client.
+TeleForge has its own name, application branding and visual identity and clearly identifies itself as an unofficial Telegram client.
