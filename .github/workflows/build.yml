@@ -39,6 +39,74 @@ jobs:
         run: |
           git clone --recursive --shallow-submodules "$TELEGRAM_UPSTREAM_REPO" upstream
 
+      - name: Configure TeleForge branding and public build
+        working-directory: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Keep the upstream source tree/package namespace intact for now.
+          # A separate application identity will be introduced together with
+          # TeleForge-owned Firebase configuration in a later release step.
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          # TeleForge branding: app labels are user-facing and safe to change
+          # without rewriting Telegram service/protocol terminology.
+          for path in root.glob('TMessagesProj/src/main/res/**/strings.xml'):
+              text = path.read_text(encoding='utf-8')
+              text = re.sub(r'(<string\s+name="AppName">)Telegram(</string>)', r'\1TeleForge\2', text)
+              text = re.sub(r'(<string\s+name="AppNameBeta">)Telegram Beta(</string>)', r'\1TeleForge Beta\2', text)
+              path.write_text(text, encoding='utf-8')
+
+          # Hide the upstream debug-only Test Backend control from public
+          # TeleForge builds while leaving the underlying networking capability
+          # untouched for future developer builds.
+          login = root / 'TMessagesProj/src/main/java/org/telegram/ui/LoginActivity.java'
+          text = login.read_text(encoding='utf-8')
+          old = 'final boolean allowTestBackend = (BuildVars.DEBUG_VERSION || TEST_BACKEND_IN_STORE && !BuildConfig.BUNDLE) || getConnectionsManager().isTestBackend();'
+          new = 'final boolean allowTestBackend = false;'
+          if old not in text:
+              raise SystemExit('Expected LoginActivity Test Backend gate was not found')
+          text = text.replace(old, new, 1)
+          login.write_text(text, encoding='utf-8')
+          PY
+
+          # TeleForge launcher mark. This is a vector drawable so it works
+          # across Android versions without depending on Telegram's bitmap
+          # launcher assets.
+          mkdir -p TMessagesProj/src/main/res/drawable
+          cat > TMessagesProj/src/main/res/drawable/ic_teleforge_launcher.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#111827"
+                  android:pathData="M14,4 L94,4 C99.5,4 104,8.5 104,14 L104,94 C104,99.5 99.5,104 94,104 L14,104 C8.5,104 4,99.5 4,94 L4,14 C4,8.5 8.5,4 14,4 Z" />
+              <path
+                  android:fillColor="#5EEAD4"
+                  android:pathData="M18,25 L64,25 L64,36 L47,36 L47,82 L35,82 L35,36 L18,36 Z" />
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M58,25 L91,25 L91,36 L70,36 L70,48 L88,48 L88,59 L70,59 L70,82 L58,82 Z" />
+          </vector>
+          XML
+
+          # Use the TeleForge mark for the public application and account icon.
+          find TMessagesProj/config TMessagesProj/src/main -type f \( -name 'AndroidManifest*.xml' -o -name 'auth.xml' -o -name 'contacts.xml' \) -print0 \
+            | xargs -0 sed -i \
+              -e 's#@mipmap/ic_launcher_sa#@drawable/ic_teleforge_launcher#g' \
+              -e 's#@mipmap/ic_launcher_round#@drawable/ic_teleforge_launcher#g' \
+              -e 's#@mipmap/ic_launcher#@drawable/ic_teleforge_launcher#g' \
+              -e 's#@drawable/ic_launcher_dr#@drawable/ic_teleforge_launcher#g'
+
       - name: Configure Telegram credentials
         working-directory: upstream
         shell: bash
