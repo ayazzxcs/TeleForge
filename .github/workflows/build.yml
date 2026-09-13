@@ -47,6 +47,20 @@ jobs:
           python3 "$GITHUB_WORKSPACE/scripts/apply-teleforge-patches.py"
           python3 "$GITHUB_WORKSPACE/scripts/apply-teleforge-ui.py"
 
+      - name: Verify TeleForge UI source patches
+        working-directory: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f TMessagesProj/src/main/java/org/telegram/ui/TeleForgeFoldersActivity.java
+          grep -Fq 'private MainTabsLayout teleForgeTabsView;' TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java
+          grep -Fq 'createTeleForgeNavigation(Context context)' TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java
+          grep -Fq 'R.drawable.msg_folders' TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java
+          grep -Fq 'actionBar.setTitle("TeleForge", statusDrawable);' TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java
+          grep -Fq 'Your chats, your way.' TMessagesProj/src/main/java/org/telegram/ui/TeleForgeFoldersActivity.java
+          grep -Fq 'createIconTab(Context context' TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java
+          echo 'Verified: TeleForge navigation, title, and Power Folders source are present before Gradle.'
+
       - name: Configure Telegram credentials
         working-directory: upstream
         shell: bash
