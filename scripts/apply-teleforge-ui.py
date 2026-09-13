@@ -20,56 +20,184 @@ for strings in (ROOT / 'TMessagesProj/src/main/res').glob('values*/strings.xml')
     strings.write_text(text, encoding='utf-8')
 
 
-# The current Telegram main screen is hosted by MainTabsActivity. Its child
-# DialogsActivity owns the visible ActionBar, so enforce the TeleForge title
-# after the pager has resumed instead of guessing a DialogsActivity source line.
+# Patch the actual main-dialog title path. DialogsActivity builds the title as a
+# Telegram-logo ImageSpan + AppName, so changing only MainTabsActivity is not
+# sufficient. Replace that exact block with a plain TeleForge title.
+dialogs = ROOT / 'TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java'
+text = dialogs.read_text(encoding='utf-8')
+title_old = '''                statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
+                statusDrawable.center = true;
+                logoDrawable = context.getResources().getDrawable(R.drawable.telegram_logo_2).mutate();
+                logoDrawable.setBounds(0, dp(2), logoDrawable.getIntrinsicWidth(), dp(2) + logoDrawable.getIntrinsicHeight());
+                logoDrawable.setColorFilter(getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.MULTIPLY);
+                SpannableStringBuilder ssb = new SpannableStringBuilder(getString(R.string.AppName));
+                ssb.setSpan(new ImageSpan(logoDrawable), 0, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                actionBar.setTitle(ssb, statusDrawable);
+                updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
+'''
+title_new = '''                statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
+                statusDrawable.center = true;
+                actionBar.setTitle("TeleForge", statusDrawable);
+                updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
+'''
+replace_once(dialogs, title_old, title_new, 'DialogsActivity main title block')
+
+
+# MainTabsActivity gets a dedicated five-item TeleForge navigation bar. We keep
+# Telegram's existing ViewPager and four-page navigation underneath, while the
+# custom bar provides a real Folders destination without abusing the hidden
+# Calls slot or adding an unsupported sixth pager position.
 main_tabs = ROOT / 'TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java'
 text = main_tabs.read_text(encoding='utf-8')
 
-resume_marker = '''    @Override
-    public void onResume() {
-        super.onResume();
-        blur3_updateColors();
-'''
-resume_replacement = '''    @Override
-    public void onResume() {
-        super.onResume();
-        BaseFragment visibleFragment = getCurrentVisibleFragment();
-        if (visibleFragment instanceof DialogsActivity && visibleFragment.getActionBar() != null) {
-            visibleFragment.getActionBar().setTitle("TeleForge");
-        }
-        blur3_updateColors();
-'''
-if 'visibleFragment.getActionBar().setTitle("TeleForge")' not in text:
-    replace_once(main_tabs, resume_marker, resume_replacement, 'MainTabsActivity onResume branding anchor')
-
 field_marker = '    private View fadeView;\n'
-if 'private GlassTabView teleForgeFoldersTab;' not in text:
-    replace_once(main_tabs, field_marker, field_marker + '    private GlassTabView teleForgeFoldersTab;\n', 'MainTabsActivity folder-tab field anchor')
-
-add_marker = '''            tabsView.addView(tabs[index]);
-            tabsView.setViewVisible(view, true, false);
+fields = '''    private MainTabsLayout teleForgeTabsView;
+    private GlassTabView[] teleForgeTabs;
 '''
-add_replacement = '''            tabsView.addView(tabs[index]);
-            tabsView.setViewVisible(view, true, false);
+if 'private MainTabsLayout teleForgeTabsView;' not in text:
+    replace_once(main_tabs, field_marker, field_marker + fields, 'MainTabsActivity TeleForge navigation fields')
 
-            if (index == INDEX_CHATS && teleForgeFoldersTab == null) {
-                teleForgeFoldersTab = GlassTabView.createIconTab(context, resourceProvider, R.drawable.msg_folders, R.string.TeleForgeFolders);
-                teleForgeFoldersTab.setOnClickListener(v -> presentFragment(new TeleForgeFoldersActivity()));
-                tabsView.addTabToIgnoreClick(teleForgeFoldersTab);
-                tabsView.addView(teleForgeFoldersTab);
-                tabsView.setViewVisible(teleForgeFoldersTab, true, false);
+method_marker = '''    private void checkContactsTabBadge() {
+'''
+method = '''    private void createTeleForgeNavigation(Context context) {
+        teleForgeTabsView = new MainTabsLayout(context, resourceProvider);
+        teleForgeTabsView.setClipChildren(false);
+        teleForgeTabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));
+        teleForgeTabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));
+
+        teleForgeTabs = new GlassTabView[5];
+        teleForgeTabs[0] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CHATS, R.string.MainTabsChats);
+        teleForgeTabs[1] = GlassTabView.createIconTab(context, resourceProvider, R.drawable.msg_folders, R.string.TeleForgeFolders);
+        teleForgeTabs[2] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CONTACTS, R.string.MainTabsContacts);
+        teleForgeTabs[3] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.SETTINGS, R.string.Settings);
+        teleForgeTabs[4] = GlassTabView.createAvatar(context, resourceProvider, currentAccount, R.string.MainTabsProfile);
+
+        for (GlassTabView tab : teleForgeTabs) {
+            teleForgeTabsView.addTabToIgnoreClick(tab);
+            teleForgeTabsView.addView(tab);
+        }
+
+        teleForgeTabs[0].setOnClickListener(v -> {
+            selectTab(POSITION_CHATS, true);
+            viewPager.scrollToPosition(POSITION_CHATS);
+            selectTeleForgeTab(POSITION_CHATS, true);
+        });
+        teleForgeTabs[1].setOnClickListener(v -> presentFragment(new TeleForgeFoldersActivity()));
+        teleForgeTabs[2].setOnClickListener(v -> {
+            selectTab(POSITION_CONTACTS, true);
+            viewPager.scrollToPosition(POSITION_CONTACTS);
+            selectTeleForgeTab(POSITION_CONTACTS, true);
+        });
+        teleForgeTabs[3].setOnClickListener(v -> {
+            selectTab(POSITION_CALLS_OR_SETTINGS, true);
+            viewPager.scrollToPosition(POSITION_CALLS_OR_SETTINGS);
+            selectTeleForgeTab(POSITION_CALLS_OR_SETTINGS, true);
+        });
+        teleForgeTabs[4].setOnClickListener(v -> {
+            selectTab(POSITION_PROFILE, true);
+            viewPager.scrollToPosition(POSITION_PROFILE);
+            selectTeleForgeTab(POSITION_PROFILE, true);
+        });
+
+        selectTeleForgeTab(viewPager.getCurrentPosition(), false);
+    }
+
+    private void selectTeleForgeTab(int position, boolean animated) {
+        if (teleForgeTabs == null) {
+            return;
+        }
+        for (int i = 0; i < teleForgeTabs.length; i++) {
+            boolean selected;
+            if (i == 0) {
+                selected = position == POSITION_CHATS;
+            } else if (i == 1) {
+                selected = false;
+            } else if (i == 2) {
+                selected = position == POSITION_CONTACTS;
+            } else if (i == 3) {
+                selected = position == POSITION_CALLS_OR_SETTINGS;
+            } else {
+                selected = position == POSITION_PROFILE;
             }
+            teleForgeTabs[i].setSelected(selected, animated);
+        }
+    }
+
 '''
-if 'teleForgeFoldersTab.setOnClickListener' not in text:
-    replace_once(main_tabs, add_marker, add_replacement, 'MainTabsActivity tab insertion anchor')
+if 'private void createTeleForgeNavigation(Context context)' not in text:
+    replace_once(main_tabs, method_marker, method + method_marker, 'MainTabsActivity TeleForge navigation methods')
+
+# Keep the existing upstream navigation implementation intact, but make the
+# TeleForge bar the visible bottom navigation surface.
+create_marker = '''        tabsViewWrapper.addView(tabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
+        tabsViewWrapper.setClipToPadding(false);
+'''
+create_replacement = '''        tabsViewWrapper.addView(tabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
+        tabsView.setVisibility(View.GONE);
+        createTeleForgeNavigation(context);
+        tabsViewWrapper.addView(teleForgeTabsView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
+        tabsViewWrapper.setClipToPadding(false);
+'''
+replace_once(main_tabs, create_marker, create_replacement, 'MainTabsActivity navigation wrapper')
+
+# Reuse Telegram's glass background for the TeleForge navigation after the
+# upstream background is created.
+background_marker = '''        tabsView.setBackground(tabsViewBackground);
+
+        BlurredBackgroundDrawableViewFactory iBlur3FactoryFade ='''
+background_replacement = '''        tabsView.setBackground(tabsViewBackground);
+        tabsView.setVisibility(View.GONE);
+        teleForgeTabsView.setBackground(tabsViewBackground);
+
+        BlurredBackgroundDrawableViewFactory iBlur3FactoryFade ='''
+replace_once(main_tabs, background_marker, background_replacement, 'MainTabsActivity glass background transfer')
+
+# Update the custom bar whenever the pager settles or the activity resumes.
+onresume_marker = '''        checkContactsTabBadge();
+        checkUnreadCount(true);
+'''
+onresume_replacement = '''        checkContactsTabBadge();
+        checkUnreadCount(true);
+        selectTeleForgeTab(viewPager != null ? viewPager.getCurrentPosition() : POSITION_CHATS, false);
+'''
+replace_once(main_tabs, onresume_marker, onresume_replacement, 'MainTabsActivity TeleForge navigation resume update')
+
+scroll_marker = '''        if (tabsView != null) {
+            selectTab(viewPager.getCurrentPosition(), true);
+            setGestureSelectedOverride(0, false);
+        }
+'''
+scroll_replacement = '''        if (tabsView != null) {
+            selectTab(viewPager.getCurrentPosition(), true);
+            setGestureSelectedOverride(0, false);
+            selectTeleForgeTab(viewPager.getCurrentPosition(), true);
+        }
+'''
+replace_once(main_tabs, scroll_marker, scroll_replacement, 'MainTabsActivity TeleForge navigation pager update')
+
+# Keep the unread counter on the visible TeleForge Chats tab too.
+unread_marker = '''        if (unreadCount > 0) {
+            final String unreadCountFmt = LocaleController.formatNumber(unreadCount, ',');
+            tabs[INDEX_CHATS].setCounter(unreadCountFmt, false, animated);
+        } else {
+            tabs[INDEX_CHATS].setCounter(null, false, animated);
+        }
+'''
+unread_replacement = '''        if (unreadCount > 0) {
+            final String unreadCountFmt = LocaleController.formatNumber(unreadCount, ',');
+            tabs[INDEX_CHATS].setCounter(unreadCountFmt, false, animated);
+            if (teleForgeTabs != null) teleForgeTabs[0].setCounter(unreadCountFmt, false, animated);
+        } else {
+            tabs[INDEX_CHATS].setCounter(null, false, animated);
+            if (teleForgeTabs != null) teleForgeTabs[0].setCounter(null, false, animated);
+        }
+'''
+replace_once(main_tabs, unread_marker, unread_replacement, 'MainTabsActivity unread counter')
 
 main_tabs.write_text(text, encoding='utf-8')
 
 
-# Static icon factory for the additional navigation item. It intentionally uses
-# Telegram's existing GlassTabView so selection, typography and theme behavior
-# remain native to the upstream client.
+# Static drawable-tab factory used by the custom five-item bar.
 glass = ROOT / 'TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java'
 text = glass.read_text(encoding='utf-8')
 factory_marker = '''    public static GlassTabView createAvatar(Context context, Theme.ResourcesProvider resourcesProvider, int currentAccount, @StringRes int stringRes) {
@@ -89,12 +217,12 @@ factory = '''    public static GlassTabView createIconTab(Context context, Theme
 
 '''
 if 'createIconTab(Context context' not in text:
-    replace_once(glass, factory_marker, factory + factory_marker, 'GlassTabView factory anchor')
+    replace_once(glass, factory_marker, factory + factory_marker, 'GlassTabView icon factory')
+glass.write_text(text, encoding='utf-8')
 
 
-# Custom TeleForge Power Folders screen. The actual folder data remains backed
-# by Telegram's mature folder engine for compatibility; this screen is the
-# TeleForge-native control surface we can extend with advanced folder rules.
+# Custom TeleForge Power Folders screen. Folder data remains backed by
+# Telegram's existing folder engine for compatibility.
 folders = ROOT / 'TMessagesProj/src/main/java/org/telegram/ui/TeleForgeFoldersActivity.java'
 folders.parent.mkdir(parents=True, exist_ok=True)
 folders.write_text(r'''package org.telegram.ui;
@@ -128,9 +256,7 @@ public class TeleForgeFoldersActivity extends BaseFragment {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
-        if (bold) {
-            view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        }
+        if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         return view;
     }
 
@@ -209,10 +335,8 @@ public class TeleForgeFoldersActivity extends BaseFragment {
         intro.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteGrayText));
         content.addView(intro, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 20));
 
-        content.addView(card(context, "Manage folders", "Create, rename and configure your Telegram folders", "▦",
-                v -> presentFragment(new FiltersSetupActivity())), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 10));
-        content.addView(card(context, "Advanced rules", "TeleForge-ready control surface for future smart rules", "✦",
-                v -> presentFragment(new FiltersSetupActivity())), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 20));
+        content.addView(card(context, "Manage folders", "Create, rename and configure your Telegram folders", "▦", v -> presentFragment(new FiltersSetupActivity())), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 10));
+        content.addView(card(context, "Advanced rules", "TeleForge-ready control surface for future smart rules", "✦", v -> presentFragment(new FiltersSetupActivity())), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 20));
 
         TextView section = text(context, "TeleForge layout", 15, true);
         content.addView(section, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 8));
@@ -233,7 +357,7 @@ public class TeleForgeFoldersActivity extends BaseFragment {
 ''', encoding='utf-8')
 
 
-# Keep debug/release app labels deterministic as well as the AppName resource.
+# Keep debug/release app labels deterministic.
 for manifest in (
     ROOT / 'TMessagesProj/config/debug/AndroidManifest.xml',
     ROOT / 'TMessagesProj/config/debug/AndroidManifest_SDK23.xml',
@@ -246,4 +370,4 @@ for manifest in (
         text = text.replace('android:label="@string/AppNameBeta"', 'android:label="@string/AppName"')
         manifest.write_text(text, encoding='utf-8')
 
-print('TeleForge UI v2 patches applied successfully')
+print('TeleForge UI v3 patches applied successfully')
