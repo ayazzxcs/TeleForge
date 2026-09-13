@@ -15,6 +15,16 @@ TeleForge is an unofficial third-party Telegram Android client built on top of t
 - The upstream debug-only **Test Backend** selector is hidden from public builds.
 - The first production identity/package migration is intentionally held until TeleForge has its own Firebase configuration, so push notifications are not accidentally tied to Telegram's Firebase application.
 
+## Next build
+
+The next build bundles the first TeleForge power-user hub directly into Settings:
+
+- **TeleForge Control Center** for power-user tools and feature flags.
+- **Power Folders** entry connected to Telegram's existing folder manager.
+- **Theme Studio** entry connected to Telegram's existing theme editor.
+- Persistent **Experimental features** and **Privacy-first mode** switches as the foundation for TeleForge-native behavior.
+- A TeleForge-owned settings surface that can be expanded without replacing Telegram's core messaging implementation.
+
 ## Project direction
 
 The foundation is the official Telegram Android source. Features from other Telegram clients may be studied and reimplemented only after checking their licenses and dependencies. We will not blindly merge unrelated forks.
