@@ -45,6 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 "$GITHUB_WORKSPACE/scripts/apply-teleforge-patches.py"
+          python3 "$GITHUB_WORKSPACE/scripts/apply-teleforge-ui.py"
 
       - name: Configure Telegram credentials
         working-directory: upstream
