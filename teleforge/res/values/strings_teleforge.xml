@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TeleForge User-Facing App Identity -->
+    <string name="AppName">TeleForge</string>
+    <string name="AppNameBeta">TeleForge Beta</string>
+    <string name="AppTagline">The Power User Telegram Client.</string>
+
+    <!-- Onboarding / Intro Screen Overrides -->
+    <string name="Page1Title">TeleForge</string>
+    <string name="Page1Message">The Power User Telegram Client. Fast, secure, and engineered for high throughput.</string>
+
+    <string name="Page2Title">Fast</string>
+    <string name="Page2Message">TeleForge delivers messages faster than any other application using Telegram\'s native MTProto network.</string>
+
+    <string name="Page3Title">Power Folders</string>
+    <string name="Page3Message">Your chats, your way. Organize high-traffic spaces with deep custom filter controls.</string>
+
+    <string name="Page4Title">Powerful</string>
+    <string name="Page4Message">TeleForge provides power-user tooling without compromising Telegram\'s rock-solid core.</string>
+
+    <string name="Page5Title">Secure</string>
+    <string name="Page5Message">TeleForge keeps your conversations safe with Telegram\'s proven cryptographic substrate.</string>
+
+    <string name="Page6Title">Cloud-Based</string>
+    <string name="Page6Message">TeleForge lets you access your messages from multiple devices seamlessly.</string>
+
+    <!-- TeleForge Settings Category -->
+    <string name="TeleForgeSettings">TeleForge</string>
+    <string name="TeleForgeSettingsSubtitle">Power tools and customization</string>
+    <string name="TeleForgeHubTitle">TeleForge Control Center</string>
+</resources>

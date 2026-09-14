@@ -1,0 +1,11 @@
+{
+  "apk_file": "TeleForge-1.0.0-debug.apk",
+  "latest_link": "TeleForge-latest.apk",
+  "size_bytes": 6417,
+  "sha256": "89bdc4eb1c56743f1f8fda23c0ec870d34c0a5220150da849fbc4cdc2eeb7365",
+  "version": "1.0.0",
+  "version_code": 10001,
+  "package": "org.telegram.messenger",
+  "phase": "Phase 1 (Branding & Identity Architecture)",
+  "date": "2026-09-14 03:32:10 UTC"
+}
