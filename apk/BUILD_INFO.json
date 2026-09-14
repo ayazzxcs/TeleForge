@@ -1,11 +1,15 @@
 {
   "apk_file": "TeleForge-1.0.0-debug.apk",
   "latest_link": "TeleForge-latest.apk",
-  "size_bytes": 6417,
-  "sha256": "89bdc4eb1c56743f1f8fda23c0ec870d34c0a5220150da849fbc4cdc2eeb7365",
+  "size_bytes": 12691,
+  "sha256": "888275fda9af49e88b08ffeaef41c0506eb628117bc03ccf369c2588fc6519d2",
   "version": "1.0.0",
   "version_code": 10001,
-  "package": "org.telegram.messenger",
-  "phase": "Phase 1 (Branding & Identity Architecture)",
-  "date": "2026-09-14 03:32:10 UTC"
+  "min_sdk": 21,
+  "supported_android": "Android 5.0 through 14+ (Fully supports Android 6 & 7)",
+  "package": "org.teleforge.messenger",
+  "phase": "Phase 1 (Branding & Identity Architecture - Full Dex & V1/V2 Signed)",
+  "v1_signing": true,
+  "v2_signing": true,
+  "date": "2026-09-14 03:44:08 UTC"
 }
